@@ -1,5 +1,40 @@
+environment:
+   groups:
+     - sonarcloud_credentials
 workflows:
   my-workflow:
     scripts:
       - name: say hello
-        script: echo "Hello Codemagician!"
+        script: echo "Hello Codemagician!"        
+      - name: Install Sonar Scanner
+        script: | 
+         brew install sonar-scanner
+      - name: Generate debug build
+        script: | 
+         xcodebuild \
+          -project "$XCODE_PROJECT" \
+          -scheme "$XCODE_SCHEME" \
+          -sdk iphonesimulator \
+          -destination 'platform=iOS Simulator,name=iPhone 14 Pro,OS=16.0' \
+          -derivedDataPath Build/ \
+          -enableCodeCoverage YES \
+          clean build test CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+      - name: Convert coverage report to Sonarqube format
+        script: | 
+         bash xccov-to-sonarqube-generic.sh Build/Logs/Test/*.xcresult/ > sonarqube-generic-coverage.xml
+      - name: Generate and upload code analysis report
+        script: | 
+         export PATH=$PATH:$CM_BUILD_DIR/sonar-scanner/bin    
+         sonar-scanner \
+          -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+          -Dsonar.organization=$SONAR_ORG_KEY \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=$SONAR_TOKEN \
+          -Dsonar.projectVersion=1.0.0 \
+          -Dsonar.sources=. \
+          -Dsonar.cfamily.build-wrapper-output.bypass=true \
+          -Dsonar.coverageReportPaths=sonarqube-generic-coverage.xml \
+          -Dsonar.c.file.suffixes=- \
+          -Dsonar.cpp.file.suffixes=- \
+          -Dsonar.objc.file.suffixes=-
+        
